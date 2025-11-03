@@ -1,0 +1,1 @@
+Unlimited easy Sudoku puzzles.
