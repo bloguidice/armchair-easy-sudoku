@@ -36,6 +36,7 @@
             position: relative;
             cursor: pointer;
             user-select: none; /* Prevents text selection on rapid clicks */
+            touch-action: manipulation; /* Removes 300ms tap delay on mobile */
         }
         
         /* On larger screens, make cells bigger */
@@ -110,6 +111,11 @@
         .notes-active {
             background-color: #3b82f6 !important; /* blue-500 */
             color: white !important;
+        }
+
+        /* Ensure smooth tapping on all buttons */
+        .numpad-btn, #swapBtn, #notesBtn {
+            touch-action: manipulation;
         }
          
     </style>
@@ -599,7 +605,8 @@
                         }
                         // Also support typing 'n' to toggle notes
                         if (e.key.toLowerCase() === 'n') {
-                            notesBtn.click();
+                            // trigger notes toggle logic directly
+                            notesBtn.dispatchEvent(new Event('pointerdown'));
                             e.preventDefault();
                         }
                         break;
@@ -766,17 +773,12 @@
             solveBtn.addEventListener('click', showSolution);
             gridElement.addEventListener('keydown', handleGridKeyDown);
             
-            // Set up Numpad Listeners
+            // Set up Numpad Listeners using pointerdown for instant touch response
             document.querySelectorAll('.numpad-btn').forEach(btn => {
-                // Prevent focus from shifting away from the grid when tapping a button
-                btn.addEventListener('mousedown', (e) => e.preventDefault());
-                btn.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
-                
-                btn.addEventListener('click', (e) => {
-                    e.preventDefault(); 
-                    const focusedElement = document.activeElement;
+                btn.addEventListener('pointerdown', (e) => {
+                    e.preventDefault(); // Prevent focus from shifting away from grid
                     
-                    // Check if an editable sudoku cell is currently focused
+                    const focusedElement = document.activeElement;
                     if (focusedElement && focusedElement.classList.contains('sudoku-cell') && focusedElement.dataset.readonly === 'false') {
                         const val = btn.dataset.val;
                         const row = parseInt(focusedElement.dataset.row);
@@ -788,17 +790,14 @@
             });
 
             // Set up Swap Toggle Listener
-            swapBtn.addEventListener('mousedown', (e) => e.preventDefault()); // Prevent focus stealing
-            swapBtn.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
-            swapBtn.addEventListener('click', (e) => {
-                e.preventDefault();
+            swapBtn.addEventListener('pointerdown', (e) => {
+                e.preventDefault(); // Prevent focus stealing
                 handleSwap();
             });
             
             // Set up Notes Toggle Listener
-            notesBtn.addEventListener('mousedown', (e) => e.preventDefault()); // Prevent focus stealing
-            notesBtn.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
-            notesBtn.addEventListener('click', () => {
+            notesBtn.addEventListener('pointerdown', (e) => {
+                e.preventDefault(); // Prevent focus stealing
                 notesMode = !notesMode;
                 if (notesMode) {
                     notesBtn.classList.add('notes-active');
