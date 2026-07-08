@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Armchair Easy Sudoku</title>
+    
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Load Google Font 'Inter' -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        /* Base styles for font */
+        body {
+            font-family: 'Inter', sans-serif;
+            /* Prevents flash on tap for mobile */
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* Notes (Pencil Marks) Styles & Base Cell Setup */
+        .sudoku-cell {
+            /* Use small sizes for mobile, larger for desktop */
+            width: 2.25rem;  /* 36px */
+            height: 2.25rem; /* 36px */
+            font-size: 1.125rem; /* 18px */
+            line-height: 1.75rem; /* 28px */
+            /* Standard square with border */
+            border: 1px solid #a8a29e; /* Equivalent to stone-400 */
+            border-radius: 0; 
+            box-sizing: border-box;
+            
+            position: relative;
+            cursor: pointer;
+            user-select: none; /* Prevents text selection on rapid clicks */
+        }
+        
+        /* On larger screens, make cells bigger */
+        @media (min-width: 640px) {
+            .sudoku-cell {
+                width: 3rem;  /* 48px */
+                height: 3rem; /* 48px */
+                font-size: 1.5rem; /* 24px */
+                line-height: 2rem; /* 32px */
+            }
+        }
+
+        /* Thick lines for 3x3 boxes */
+        .border-right-thick {
+            border-right: 3px solid #292524 !important; /* stone-800 */
+        }
+        .border-bottom-thick {
+            border-bottom: 3px solid #292524 !important; /* stone-800 */
+        }
+        
+        /* Remove number input spinners (for Firefox/Chrome) */
+        input[type=number]::-webkit-inner-spin-button,
+        input[type=number]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type=number] {
+            -moz-appearance: textfield;
+        }
+
+        /* Custom focus style for keyboard nav and mouse/touch clicks */
+        .sudoku-cell:focus {
+            outline: 2px solid #3b82f6; /* Blue-500 */
+            outline-offset: -2px;
+            background-color: #EFF6FF !important; /* bg-blue-50 */
+        }
+
+        .main-number {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+        }
+        
+        .notes-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none; /* Let clicks pass through to the cell */
+        }
+        
+        .note-num {
+            font-size: 0.6rem;
+            line-height: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #6b7280; /* stone-500 */
+        }
+        
+        @media (min-width: 640px) {
+            .note-num { font-size: 0.75rem; }
+        }
+        
+        /* Active state for Notes button */
+        .notes-active {
+            background-color: #3b82f6 !important; /* blue-500 */
+            color: white !important;
+        }
+         
+    </style>
+</head>
+<body class="bg-stone-200 text-stone-800 flex items-center justify-center min-h-screen p-4">
+
+    <!-- Main Game Card -->
+    <div class="bg-white p-4 sm:p-8 rounded-xl shadow-2xl w-fit max-w-full mx-auto">
+        
+        <!-- Header: Logo, Title, New Game Button -->
+        <div class="flex flex-col items-center mb-4 space-y-4">
+            <img src="https://armchairarcade.com/perspectives/wp-content/uploads/2015/01/aa-logo-3181.png" alt="Armchair Arcade Logo" class="mb-4 w-48 sm:w-64 max-w-full h-auto" onerror="this.style.display='none'">
+            <h1 class="text-2xl sm:text-3xl font-bold text-center" style="font-family: 'Georgia', serif;">
+                <span class="text-transparent bg-clip-text bg-gradient-to-r from-red-600 to-red-800">Armchair</span> 
+                <span class="text-transparent bg-clip-text bg-gradient-to-r from-green-500 to-green-700 font-extrabold">Easy</span> 
+                <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-blue-700 font-extrabold">Sudoku</span><sup>&trade;</sup>
+            </h1>
+            <button id="newGameBtn" class="text-white font-semibold py-2 px-4 rounded-lg shadow-md transition-all duration-150 w-full sm:w-auto bg-gradient-to-r from-green-500 to-green-700 hover:from-green-600 hover:to-green-800">
+                New Game
+            </button>
+        </div>
+
+        <!-- Sudoku Grid Container -->
+        <!-- We add a 'tabindex' to the grid to make it focusable for key events -->
+        <div id="sudoku-grid" class="grid grid-cols-9 bg-white border-4 border-stone-800 w-max mx-auto" tabindex="0">
+            <!-- Cells will be generated by JS -->
+        </div>
+
+        <!-- Notes Toggle and Numpad -->
+        <div class="mt-4">
+            <div class="flex justify-between mb-2">
+                <button id="swapBtn" class="flex items-center space-x-1 text-sm font-semibold py-1 px-3 rounded-lg bg-stone-200 hover:bg-stone-300 text-stone-700 transition-colors shadow-sm" title="Swap between Main Number and Note (Shortcut: Space)">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                    </svg>
+                    <span>Swap</span>
+                </button>
+                <button id="notesBtn" class="flex items-center space-x-1 text-sm font-semibold py-1 px-3 rounded-lg bg-stone-200 hover:bg-stone-300 text-stone-700 transition-colors shadow-sm">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                    </svg>
+                    <span id="notesBtnText">Notes: Off</span>
+                </button>
+            </div>
+            <div id="numpad" class="grid grid-cols-5 gap-1 sm:gap-2">
+                <button class="numpad-btn bg-stone-200 hover:bg-stone-300 text-stone-800 font-bold text-lg py-2 rounded-lg shadow transition-colors" data-val="1">1</button>
+                <button class="numpad-btn bg-stone-200 hover:bg-stone-300 text-stone-800 font-bold text-lg py-2 rounded-lg shadow transition-colors" data-val="2">2</button>
+                <button class="numpad-btn bg-stone-200 hover:bg-stone-300 text-stone-800 font-bold text-lg py-2 rounded-lg shadow transition-colors" data-val="3">3</button>
+                <button class="numpad-btn bg-stone-200 hover:bg-stone-300 text-stone-800 font-bold text-lg py-2 rounded-lg shadow transition-colors" data-val="4">4</button>
+                <button class="numpad-btn bg-stone-200 hover:bg-stone-300 text-stone-800 font-bold text-lg py-2 rounded-lg shadow transition-colors" data-val="5">5</button>
+                <button class="numpad-btn bg-stone-200 hover:bg-stone-300 text-stone-800 font-bold text-lg py-2 rounded-lg shadow transition-colors" data-val="6">6</button>
+                <button class="numpad-btn bg-stone-200 hover:bg-stone-300 text-stone-800 font-bold text-lg py-2 rounded-lg shadow transition-colors" data-val="7">7</button>
+                <button class="numpad-btn bg-stone-200 hover:bg-stone-300 text-stone-800 font-bold text-lg py-2 rounded-lg shadow transition-colors" data-val="8">8</button>
+                <button class="numpad-btn bg-stone-200 hover:bg-stone-300 text-stone-800 font-bold text-lg py-2 rounded-lg shadow transition-colors" data-val="9">9</button>
+                <button class="numpad-btn bg-red-100 hover:bg-red-200 text-red-700 font-bold text-lg py-2 rounded-lg shadow transition-colors flex items-center justify-center" data-val="0">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M3 12l6.414 6.414a2 2 0 001.414.586H19a2 2 0 002-2V7a2 2 0 00-2-2h-8.172a2 2 0 00-1.414.586L3 12z" /></svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Control Buttons: Check and Solve -->
+        <div class="flex justify-between mt-4 space-x-2">
+            <button id="checkBtn" class="flex-1 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition-all duration-150 bg-gradient-to-r from-blue-500 to-blue-700 hover:from-blue-600 hover:to-blue-800">
+                Check
+            </button>
+            <button id="solveBtn" class="flex-1 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition-all duration-150 flex flex-col items-center justify-center bg-gradient-to-r from-red-600 to-red-800 hover:from-red-700 hover:to-red-900">
+                <span>Solve</span>
+                <span class="text-xs font-normal opacity-90">(Counts as Loss)</span>
+            </button>
+        </div>
+        
+        <!-- Message Area: For hints and win messages -->
+        <div id="message-area" class="text-center mt-4 h-6 text-lg font-medium">
+            <!-- Messages like "Congratulations!" will appear here -->
+        </div>
+
+        <!-- Stats Section -->
+        <div class="mt-4 pt-4 border-t border-stone-300 grid grid-cols-2 gap-x-4 gap-y-2 text-lg">
+            <div class="bg-green-50 p-3 rounded-lg text-center">
+                <span class="block text-sm font-medium text-green-700">Wins</span>
+                <span id="stats-wins" class="text-2xl font-bold text-green-900">0</span>
+            </div>
+            <div class="bg-red-100 p-3 rounded-lg text-center">
+                <span class="block text-sm font-medium text-red-700">Losses</span>
+                <span id="stats-losses" class="text-2xl font-bold text-red-900">0</span>
+            </div>
+            <div class="bg-green-100 p-3 rounded-lg text-center">
+                <span class="block text-sm font-medium text-green-700">Correct</span>
+                <span id="stats-correct" class="text-2xl font-bold text-green-900">0</span>
+            </div>
+            <div class="bg-red-200 p-3 rounded-lg text-center">
+                <span class="block text-sm font-medium text-red-700">Incorrect</span>
+                <span id="stats-incorrect" class="text-2xl font-bold text-red-900">0</span>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            // --- GLOBAL VARIABLES ---
+            const GRID_SIZE = 9;
+            const BOX_SIZE = 3;
+            const EASY_CLUES = 38; // Number of clues for an "easy" game (out of 81)
+
+            let currentPuzzle = [];
+            let currentSolution = [];
+            let currentNotes = Array.from({ length: 9 }, () => Array.from({ length: 9 }, () => new Set()));
+            let notesMode = false;
+            
+            // --- STATS VARIABLES ---
+            let wins = 0;
+            let losses = 0;
+            let correctGuesses = 0;
+            let incorrectGuesses = 0;
+            let gameInProgress = true; // Flag to prevent multiple wins/losses per game
+
+            // --- DOM ELEMENTS ---
+            const gridElement = document.getElementById('sudoku-grid');
+            const newGameBtn = document.getElementById('newGameBtn');
+            const checkBtn = document.getElementById('checkBtn');
+            const solveBtn = document.getElementById('solveBtn');
+            const messageEl = document.getElementById('message-area');
+            const statsWinsEl = document.getElementById('stats-wins');
+            const statsLossesEl = document.getElementById('stats-losses');
+            const statsCorrectEl = document.getElementById('stats-correct');
+            const statsIncorrectEl = document.getElementById('stats-incorrect');
+            const swapBtn = document.getElementById('swapBtn');
+            const notesBtn = document.getElementById('notesBtn');
+            const notesBtnText = document.getElementById('notesBtnText');
+
+            // --- SUDOKU LOGIC (GENERATOR & SOLVER) ---
+            
+            /**
+             * Shuffles an array in place.
+             */
+            function shuffleArray(array) {
+                for (let i = array.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [array[i], array[j]] = [array[j], array[i]];
+                }
+            }
+
+            /**
+             * Creates an empty 9x9 board filled with 0s.
+             */
+            function createEmptyBoard() {
+                return Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(0));
+            }
+
+            /**
+             * Checks if a number can be placed at a given row/col.
+             */
+            function isValid(board, row, col, num) {
+                // Check row
+                for (let x = 0; x < GRID_SIZE; x++) {
+                    if (board[row][x] === num) return false;
+                }
+                // Check column
+                for (let y = 0; y < GRID_SIZE; y++) {
+                    if (board[y][col] === num) return false;
+                }
+                // Check 3x3 box
+                const startRow = Math.floor(row / BOX_SIZE) * BOX_SIZE;
+                const startCol = Math.floor(col / BOX_SIZE) * BOX_SIZE;
+                for (let y = 0; y < BOX_SIZE; y++) {
+                    for (let x = 0; x < BOX_SIZE; x++) {
+                        if (board[startRow + y][startCol + x] === num) return false;
+                    }
+                }
+                return true;
+            }
+
+            /**
+             * Finds the next empty cell (value 0) in the board.
+             * Returns [row, col] or null if full.
+             */
+            function findEmptyCell(board) {
+                for (let y = 0; y < GRID_SIZE; y++) {
+                    for (let x = 0; x < GRID_SIZE; x++) {
+                        if (board[y][x] === 0) {
+                            return [y, x];
+                        }
+                    }
+                }
+                return null;
+            }
+
+            /**
+             * Solves the Sudoku board using backtracking.
+             * This is also used to generate the initial solution.
+             */
+            function solveSudoku(board) {
+                const emptyCell = findEmptyCell(board);
+                if (!emptyCell) {
+                    return true; // Board is solved
+                }
+                
+                const [row, col] = emptyCell;
+                const numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+                shuffleArray(numbers); // Randomize to get different solutions
+
+                for (const num of numbers) {
+                    if (isValid(board, row, col, num)) {
+                        board[row][col] = num;
+                        if (solveSudoku(board)) {
+                            return true;
+                        }
+                        board[row][col] = 0; // Backtrack
+                    }
+                }
+                return false; // No valid number found
+            }
+
+            /**
+             * Generates a new puzzle with a specific number of clues.
+             */
+            function generatePuzzle(clues) {
+                const board = createEmptyBoard();
+                
+                // 1. Create a full, valid solution
+                solveSudoku(board);
+                const solution = JSON.parse(JSON.stringify(board)); // Deep copy solution
+
+                // 2. Poke holes in the board to create the puzzle
+                let cellsToRemove = (GRID_SIZE * GRID_SIZE) - clues;
+                while (cellsToRemove > 0) {
+                    const row = Math.floor(Math.random() * GRID_SIZE);
+                    const col = Math.floor(Math.random() * GRID_SIZE);
+
+                    if (board[row][col] !== 0) {
+                        board[row][col] = 0;
+                        cellsToRemove--;
+                    }
+                }
+                
+                return { puzzle: board, solution: solution };
+            }
+
+
+            // --- STATS FUNCTIONS ---
+
+            /**
+             * Loads persistent stats (Wins/Losses) from localStorage.
+             */
+            function loadStats() {
+                wins = parseInt(localStorage.getItem('sudokuWins') || '0');
+                losses = parseInt(localStorage.getItem('sudokuLosses') || '0');
+                updateStatsDisplay();
+            }
+
+            /**
+             * Saves persistent stats to localStorage.
+             */
+            function saveStats() {
+                localStorage.setItem('sudokuWins', wins.toString());
+                localStorage.setItem('sudokuLosses', losses.toString());
+            }
+
+            /**
+             * Updates all stats in the DOM.
+             */
+            function updateStatsDisplay() {
+                statsWinsEl.textContent = wins;
+                statsLossesEl.textContent = losses;
+                statsCorrectEl.textContent = correctGuesses;
+                statsIncorrectEl.textContent = incorrectGuesses;
+            }
+
+            /**
+             * Resets the current game's guess counts to 0.
+             */
+            function resetGuessCounts() {
+                correctGuesses = 0;
+                incorrectGuesses = 0;
+            }
+
+
+            // --- UI & GAME FLOW ---
+
+            /**
+             * Renders the 9x9 board in the DOM.
+             */
+            function renderBoard(board) {
+                gridElement.innerHTML = ''; // Clear old grid
+                
+                for (let i = 0; i < GRID_SIZE; i++) {
+                    for (let j = 0; j < GRID_SIZE; j++) {
+                        // Use a div instead of an input so we can render tiny numbers inside
+                        const cell = document.createElement('div');
+                        cell.dataset.row = i;
+                        cell.dataset.col = j;
+                        
+                        // Add tabindex=-1 so cells can be focused by JS but not by tabbing
+                        cell.tabIndex = -1;
+                        
+                        // Base classes for all cells
+                        cell.className = 'sudoku-cell text-center transition-all duration-100 outline-none bg-white';
+
+                        // Add thick borders to form the 3x3 boxes (every 3rd column/row)
+                        if (j === 2 || j === 5) cell.classList.add('border-right-thick');
+                        if (i === 2 || i === 5) cell.classList.add('border-bottom-thick');
+
+                        // Create internal containers
+                        const notesGrid = document.createElement('div');
+                        notesGrid.className = 'notes-grid';
+                        for(let n=1; n<=9; n++) {
+                            const note = document.createElement('div');
+                            note.className = `note-num note-${n}`;
+                            notesGrid.appendChild(note);
+                        }
+                        
+                        const mainNum = document.createElement('div');
+                        mainNum.className = 'main-number';
+
+                        cell.appendChild(notesGrid);
+                        cell.appendChild(mainNum);
+
+                        gridElement.appendChild(cell);
+                    }
+                }
+                
+                // Populate initial values
+                for (let i = 0; i < GRID_SIZE; i++) {
+                    for (let j = 0; j < GRID_SIZE; j++) {
+                        const value = board[i][j];
+                        const cell = gridElement.querySelector(`[data-row="${i}"][data-col="${j}"]`);
+                        
+                        if (value !== 0) {
+                            // Pre-filled clue
+                            cell.dataset.readonly = 'true';
+                            cell.classList.remove('bg-white');
+                            cell.classList.add('bg-stone-100', 'text-stone-900', 'font-bold');
+                        } else {
+                            // Empty cell for user
+                            cell.dataset.readonly = 'false';
+                            cell.classList.add('text-blue-600', 'font-semibold', 'hover:bg-blue-50');
+                            
+                            // Add click listener to focus
+                            cell.addEventListener('click', () => {
+                                cell.focus();
+                            });
+                        }
+                        updateCellDisplay(i, j);
+                    }
+                }
+            }
+            
+            /**
+             * Updates the visual display of a single cell (Main Number vs Notes)
+             */
+            function updateCellDisplay(row, col) {
+                const cell = gridElement.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+                if (!cell) return;
+                
+                const mainNum = cell.querySelector('.main-number');
+                const notesGrid = cell.querySelector('.notes-grid');
+                const val = currentPuzzle[row][col];
+                
+                if (val !== 0) {
+                    mainNum.textContent = val;
+                    notesGrid.style.display = 'none';
+                } else {
+                    mainNum.textContent = '';
+                    notesGrid.style.display = 'grid';
+                    const notes = currentNotes[row][col];
+                    for(let n=1; n<=9; n++) {
+                        const noteEl = notesGrid.querySelector(`.note-${n}`);
+                        noteEl.textContent = notes.has(n) ? n : '';
+                    }
+                }
+            }
+
+            /**
+             * Universal Input Handler (Keypress & Numpad)
+             */
+            function handleInput(row, col, valStr) {
+                const cell = gridElement.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+                if (cell.dataset.readonly === 'true') return;
+
+                if (valStr === '' || valStr === '0') {
+                    currentPuzzle[row][col] = 0;
+                } else {
+                    const num = Number(valStr);
+                    if (notesMode && currentPuzzle[row][col] === 0) {
+                        // Toggle note if cell is empty
+                        if (currentNotes[row][col].has(num)) {
+                            currentNotes[row][col].delete(num);
+                        } else {
+                            currentNotes[row][col].add(num);
+                        }
+                    } else if (!notesMode) {
+                        // Set main number
+                        currentPuzzle[row][col] = num;
+                    }
+                }
+                
+                updateCellDisplay(row, col);
+                clearValidationStyles();
+                clearMessage();
+            }
+            
+            /**
+             * Swaps a cell between a main guess and a note.
+             */
+            function handleSwap() {
+                const focusedElement = document.activeElement;
+                if (focusedElement && focusedElement.classList.contains('sudoku-cell') && focusedElement.dataset.readonly === 'false') {
+                    const row = parseInt(focusedElement.dataset.row);
+                    const col = parseInt(focusedElement.dataset.col);
+                    const mainVal = currentPuzzle[row][col];
+
+                    if (mainVal !== 0) {
+                        // Demote: clear main number, add it to notes
+                        currentPuzzle[row][col] = 0;
+                        currentNotes[row][col].add(mainVal);
+                    } else if (currentNotes[row][col].size === 1) {
+                        // Promote: move single note to main number
+                        const noteVal = Array.from(currentNotes[row][col])[0];
+                        currentNotes[row][col].delete(noteVal);
+                        currentPuzzle[row][col] = noteVal;
+                    }
+                    updateCellDisplay(row, col);
+                    clearValidationStyles();
+                    clearMessage();
+                }
+            }
+            
+            /**
+             * Handles keydown events on the grid for navigation and input.
+             */
+            function handleGridKeyDown(e) {
+                const focusedElement = document.activeElement;
+                if (!focusedElement || !focusedElement.classList.contains('sudoku-cell')) {
+                    // If the grid container has focus, focus the first cell
+                    if(e.target === gridElement) {
+                        const firstCell = gridElement.querySelector('.sudoku-cell[data-row="0"][data-col="0"]');
+                        if (firstCell) firstCell.focus();
+                        e.preventDefault();
+                    }
+                    return;
+                }
+
+                const currentRow = parseInt(focusedElement.dataset.row);
+                const currentCol = parseInt(focusedElement.dataset.col);
+
+                let newRow = currentRow;
+                let newCol = currentCol;
+
+                // Handle Arrow Key Navigation
+                switch (e.key) {
+                    case 'ArrowUp':
+                        newRow = (currentRow > 0) ? currentRow - 1 : GRID_SIZE - 1;
+                        e.preventDefault();
+                        break;
+                    case 'ArrowDown':
+                        newRow = (currentRow < GRID_SIZE - 1) ? currentRow + 1 : 0;
+                        e.preventDefault();
+                        break;
+                    case 'ArrowLeft':
+                        newCol = (currentCol > 0) ? currentCol - 1 : GRID_SIZE - 1;
+                        e.preventDefault();
+                        break;
+                    case 'ArrowRight':
+                        newCol = (currentCol < GRID_SIZE - 1) ? currentCol + 1 : 0;
+                        e.preventDefault();
+                        break;
+                    case 'Backspace':
+                    case 'Delete':
+                        // Handle number deletion
+                        handleInput(currentRow, currentCol, '');
+                        e.preventDefault();
+                        break;
+                    case ' ':
+                    case 's':
+                    case 'S':
+                        // Swap shortcut
+                        handleSwap();
+                        e.preventDefault();
+                        break;
+                    default:
+                        // Handle Number Input
+                        if (/^[1-9]$/.test(e.key)) {
+                            handleInput(currentRow, currentCol, e.key);
+                            e.preventDefault();
+                        }
+                        // Also support typing 'n' to toggle notes
+                        if (e.key.toLowerCase() === 'n') {
+                            notesBtn.click();
+                            e.preventDefault();
+                        }
+                        break;
+                }
+
+                // If navigation occurred, focus the new cell
+                if (newRow !== currentRow || newCol !== currentCol) {
+                    const newCell = gridElement.querySelector(`.sudoku-cell[data-row="${newRow}"][data-col="${newCol}"]`);
+                    if (newCell) {
+                        newCell.focus();
+                    }
+                }
+            }
+
+
+            /**
+             * Clears all validation styles from the board.
+             */
+            function clearValidationStyles() {
+                const cells = gridElement.querySelectorAll('.sudoku-cell');
+                cells.forEach(cell => {
+                    cell.classList.remove('bg-red-300', 'text-red-900', 'bg-green-300', 'text-green-900');
+                });
+            }
+
+            /**
+             * Sets the message text and style.
+             */
+            function setMessage(text, type = 'info') {
+                messageEl.textContent = text;
+                messageEl.classList.remove('text-green-600', 'text-red-600', 'text-sky-600');
+                
+                if (type === 'success') {
+                    messageEl.classList.add('text-green-600');
+                } else if (type === 'error') {
+                    messageEl.classList.add('text-red-600');
+                } else {
+                    messageEl.classList.add('text-sky-600');
+                }
+            }
+            
+            /**
+             * Clears the message area.
+             */
+            function clearMessage() {
+                 messageEl.textContent = '';
+                 messageEl.className = 'text-center mt-4 h-6 text-lg font-medium';
+            }
+
+            /**
+             * Checks the user's current solution against the correct one.
+             */
+            function checkUserSolution() {
+                if (!gameInProgress) return; // Don't check a finished game
+                
+                clearValidationStyles();
+                clearMessage();
+                
+                // Reset guess counts for this check
+                correctGuesses = 0;
+                incorrectGuesses = 0;
+                
+                let isComplete = true;
+                let isCorrect = true;
+                
+                for (let i = 0; i < GRID_SIZE; i++) {
+                    for (let j = 0; j < GRID_SIZE; j++) {
+                        const cell = gridElement.querySelector(`[data-row="${i}"][data-col="${j}"]`);
+                        const userValue = currentPuzzle[i][j];
+                        const solutionValue = currentSolution[i][j];
+
+                        // Check user-editable cells
+                        if (cell.dataset.readonly === 'false') { 
+                            if (userValue === 0) {
+                                isComplete = false;
+                            } else if (userValue !== solutionValue) {
+                                isCorrect = false;
+                                cell.classList.add('bg-red-300', 'text-red-900');
+                                incorrectGuesses++;
+                            } else {
+                                // User value is correct
+                                cell.classList.add('bg-green-300', 'text-green-900');
+                                correctGuesses++;
+                            }
+                        } else {
+                            // This is a pre-filled clue
+                            if (userValue === 0) isComplete = false; // Should never happen
+                        }
+                    }
+                }
+
+                // Display appropriate message
+                if (isComplete && isCorrect) {
+                    setMessage('Congratulations! You solved it!', 'success');
+                    wins++;
+                    gameInProgress = false;
+                    saveStats();
+                    // Make board read-only
+                    gridElement.querySelectorAll('.sudoku-cell').forEach(cell => cell.dataset.readonly = 'true');
+                    gridElement.tabIndex = -1; // Remove grid from tab order
+                } else if (isComplete && !isCorrect) {
+                    setMessage('Something is incorrect. Keep trying!', 'error');
+                } else if (!isComplete && !isCorrect) {
+                     setMessage('Errors found. Keep trying!', 'error');
+                } else {
+                    setMessage('Keep going! So far, so good.', 'info');
+                }
+                
+                updateStatsDisplay(); // Update all stats in DOM
+            }
+
+            /**
+             * Fills the board with the correct solution. Counts as a loss.
+             */
+            function showSolution() {
+                if (!gameInProgress) return; // Game already finished, don't penalize twice
+                
+                currentPuzzle = JSON.parse(JSON.stringify(currentSolution)); // Update internal state
+                renderBoard(currentSolution);
+                // Make all cells read-only after solving
+                gridElement.querySelectorAll('.sudoku-cell').forEach(cell => {
+                    cell.dataset.readonly = 'true';
+                    cell.classList.remove('bg-white', 'text-blue-600', 'cursor-pointer', 'hover:bg-blue-50');
+                    cell.classList.add('bg-stone-100', 'text-stone-900', 'font-bold');
+                    updateCellDisplay(cell.dataset.row, cell.dataset.col);
+                });
+                
+                setMessage('Solution revealed! Better luck next time.', 'info');
+                
+                losses++;
+                gameInProgress = false;
+                saveStats();
+                resetGuessCounts(); // Clear guesses for the "lost" game
+                updateStatsDisplay();
+                gridElement.tabIndex = -1; // Remove grid from tab order
+            }
+
+            /**
+             * Starts a new game.
+             */
+            function startNewGame() {
+                const { puzzle, solution } = generatePuzzle(EASY_CLUES);
+                currentPuzzle = puzzle;
+                currentSolution = solution;
+                
+                // Reset notes
+                for(let i=0; i<9; i++) {
+                    for(let j=0; j<9; j++) {
+                        currentNotes[i][j].clear();
+                    }
+                }
+                
+                renderBoard(currentPuzzle);
+                clearMessage();
+                resetGuessCounts();
+                updateStatsDisplay(); // Update display (guesses to 0)
+                gameInProgress = true;
+                gridElement.tabIndex = 0; // Make grid focusable again
+            }
+
+            // --- EVENT LISTENERS ---
+            newGameBtn.addEventListener('click', startNewGame);
+            checkBtn.addEventListener('click', checkUserSolution);
+            solveBtn.addEventListener('click', showSolution);
+            gridElement.addEventListener('keydown', handleGridKeyDown);
+            
+            // Set up Numpad Listeners
+            document.querySelectorAll('.numpad-btn').forEach(btn => {
+                // Prevent focus from shifting away from the grid when tapping a button
+                btn.addEventListener('mousedown', (e) => e.preventDefault());
+                btn.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
+                
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault(); 
+                    const focusedElement = document.activeElement;
+                    
+                    // Check if an editable sudoku cell is currently focused
+                    if (focusedElement && focusedElement.classList.contains('sudoku-cell') && focusedElement.dataset.readonly === 'false') {
+                        const val = btn.dataset.val;
+                        const row = parseInt(focusedElement.dataset.row);
+                        const col = parseInt(focusedElement.dataset.col);
+
+                        handleInput(row, col, val === '0' ? '' : val);
+                    }
+                });
+            });
+
+            // Set up Swap Toggle Listener
+            swapBtn.addEventListener('mousedown', (e) => e.preventDefault()); // Prevent focus stealing
+            swapBtn.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
+            swapBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                handleSwap();
+            });
+            
+            // Set up Notes Toggle Listener
+            notesBtn.addEventListener('mousedown', (e) => e.preventDefault()); // Prevent focus stealing
+            notesBtn.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
+            notesBtn.addEventListener('click', () => {
+                notesMode = !notesMode;
+                if (notesMode) {
+                    notesBtn.classList.add('notes-active');
+                    notesBtnText.textContent = 'Notes: On';
+                } else {
+                    notesBtn.classList.remove('notes-active');
+                    notesBtnText.textContent = 'Notes: Off';
+                }
+            });
+
+            // --- INITIALIZE ---
+            loadStats(); // Load persistent stats first
+            startNewGame(); // Start the first game
+        });
+    </script>
+</body>
+</html>
